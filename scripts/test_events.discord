@@ -1,0 +1,19 @@
+# Test: Event handlers for various event types
+
+on script load:
+    log "Script loaded event works"
+
+on message:
+    log "Message event works"
+
+on guild member join:
+    log "Member join event works"
+
+on guild member leave:
+    log "Member leave event works"
+
+on reaction add:
+    log "Reaction add event works"
+
+on button click:
+    log "Button click event works"

@@ -1,0 +1,25 @@
+options:
+    prefix: "!"
+
+discord command info:
+    prefixes: !
+    trigger:
+        make embed:
+            set title of embed to "Server Info"
+            set description of embed to "Information about this server"
+            set color of embed to #2ECC71
+            set footer of embed to "Requested by %display name of event-author%"
+        post last embed to event-channel
+
+discord command userinfo [<user>]:
+    prefixes: !
+    trigger:
+        if arg-1 is not set:
+            set {_target} to event-user
+        else:
+            set {_target} to arg-1
+        make embed:
+            set title of embed to "User: %display name of {_target}%"
+            set thumbnail of embed to "%avatar url of {_target}%"
+            set color of embed to #9B59B6
+        post last embed to event-channel

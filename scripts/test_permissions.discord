@@ -1,0 +1,14 @@
+# Test: Permissions
+
+discord command admin_only:
+    prefixes: !
+    permissions: administrator
+    permission message: "You need admin!"
+    trigger:
+        reply with "You are an admin!"
+
+discord command moderate:
+    prefixes: !
+    permissions: kick_members, ban_members
+    trigger:
+        reply with "You can moderate!"

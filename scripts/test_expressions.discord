@@ -1,0 +1,20 @@
+# Test: Expressions
+
+on script load:
+    set {_sum} to 10 + 20
+    set {_diff} to 100 - 30
+    set {_prod} to 5 * 6
+    set {_quot} to 50 / 2
+
+    set {_len} to length of "hello"
+
+    if {_sum} is 30:
+        log "Math expressions work"
+
+    set {_list::1} to "a"
+    set {_list::2} to "b"
+    set {_size} to size of {_list::*}
+
+    set {_name} to "Alice"
+    if name of event-user is {_name}:
+        log "Expression works"

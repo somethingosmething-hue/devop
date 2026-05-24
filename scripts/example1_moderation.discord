@@ -1,0 +1,31 @@
+options:
+    prefix: "!"
+
+on guild member join:
+    make embed:
+        set title of embed to "Welcome!"
+        set description of embed to "Welcome to the server!"
+        set color of embed to green
+        set thumbnail of embed to avatar of event-user
+    post last embed to event-channel
+
+discord command kick:
+    prefixes: !
+    permissions: kick_members
+    permission message: "You don't have permission to kick members!"
+    trigger:
+        if arg-1 is not set:
+            reply with "Usage: !kick <member>"
+            stop
+        kick arg-1 due to "Kicked by moderator"
+        reply with "User has been kicked!"
+
+discord command ban:
+    prefixes: !
+    permissions: ban_members
+    trigger:
+        if arg-1 is not set:
+            reply with "Usage: !ban <member>"
+            stop
+        ban arg-1 due to "Banned by moderator"
+        reply with "User has been banned!"

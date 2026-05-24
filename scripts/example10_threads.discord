@@ -1,0 +1,8 @@
+discord command support:
+    prefixes: !
+    trigger:
+        reply with "Support thread feature coming soon!"
+
+on thread create:
+    if name of event-channel starts with "support-":
+        send "New support thread created!" to event-channel

@@ -1,0 +1,8 @@
+[default]
+token = "YOUR_DISCORD_BOT_TOKEN_HERE"
+
+#[ModBot]
+#token = "YOUR_MOD_BOT_TOKEN"
+
+#[MusicBot]
+#token = "YOUR_MUSIC_BOT_TOKEN"

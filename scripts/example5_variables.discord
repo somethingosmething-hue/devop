@@ -1,0 +1,34 @@
+options:
+    prefix: "!"
+
+on script load:
+    set {_version} to "1.0.0"
+    send "Bot v{%{_version}%} loaded" to console
+
+discord command setwelcome [<message>]:
+    prefixes: !
+    permissions: manage_guild
+    trigger:
+        if arg-1 is set:
+            set {welcome_message} to arg-1
+            reply with "Welcome message updated!"
+        else:
+            reply with "Usage: !setwelcome <message>"
+
+discord command counter:
+    prefixes: !
+    trigger:
+        set {_count} to {counter}
+        if {counter} is not set:
+            set {counter} to 1
+        else:
+            add 1 to {counter}
+        reply with "Counter: %{counter}% (was %{_count}%)"
+
+discord command clearvars:
+    prefixes: !
+    permissions: administrator
+    trigger:
+        clear {welcome_message}
+        clear {counter}
+        reply with "Global variables cleared!"

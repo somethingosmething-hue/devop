@@ -1,0 +1,14 @@
+variables:
+    {warnings::%id of member%} = 0
+
+discord command warn:
+    prefixes: !
+    permissions: moderate_members
+    trigger:
+        add 1 to {warnings::%id of arg1%}
+        set {_count} to {warnings::%id of arg1%}
+        reply with "User has been warned!"
+        if {_count} >= 3:
+            timeout arg1 for 1 day due to "3 warnings reached"
+            set {warnings::%id of arg1%} to 0
+            reply with "User has been timed out!"

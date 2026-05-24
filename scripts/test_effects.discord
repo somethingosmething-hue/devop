@@ -1,0 +1,19 @@
+# Test: Effects coverage
+
+send "test" to console
+log "Log effect works"
+
+wait 1 second
+
+set {_x} to 10
+add 5 to {_x}
+remove 3 from {_x}
+
+if {_x} is 12:
+    log "Math effects work"
+
+loop 3 times:
+    if loop-number is 2:
+        log "Loop number is 2"
+        continue
+    log "Loop iteration %loop-number%"

@@ -1,0 +1,15 @@
+# Test: Multi-bot definitions
+
+define new bot named "BotOne":
+    token: "TOKEN_1"
+    intents: messages, guilds
+
+define new bot named "BotTwo":
+    token: "TOKEN_2"
+    intents: guilds, voice_states
+
+on ready from bot "BotOne":
+    log "BotOne is ready"
+
+on ready from bot "BotTwo":
+    log "BotTwo is ready"

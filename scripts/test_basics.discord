@@ -1,0 +1,17 @@
+# Test: Basic variable assignment, math, string, if/else, loops
+
+set {_num} to 42
+set {_text} to "hello"
+set {_flag} to true
+set {_result} to {_num} + 8
+if {_result} is 50:
+    log "Math works"
+else:
+    log "Math failed"
+
+set {_greeting} to "Hello, world!"
+if {_greeting} contains "world":
+    log "String contains works"
+
+loop 3 times:
+    log "Loop iteration"

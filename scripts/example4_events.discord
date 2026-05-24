@@ -1,0 +1,23 @@
+options:
+    prefix: "!"
+
+on script load:
+    send "&aBot is ready!" to console
+
+on guild member join:
+    set {_rules} to id of text channel named "rules" in event-guild
+    send "Welcome to the server, %mention tag of event-member%!" to event-member
+    send "%name of event-member% joined the server!" to event-channel
+
+on guild member leave:
+    set {_leave_msg} to "%name of event-user% left the server. We now have %member count of event-guild% members."
+    broadcast {_leave_msg} to event-guild
+
+on message:
+    if content of event-message contains "good bot":
+        add reaction "👍" to event-message
+        reply with "Thanks!"
+
+on reaction add:
+    if name of event-emote is "star":
+        add 1 to {_star_count}

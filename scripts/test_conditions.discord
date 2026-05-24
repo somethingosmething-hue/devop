@@ -1,0 +1,25 @@
+# Test: Conditions
+
+set {_x} to 10
+
+if {_x} is set:
+    log "is set works"
+
+if {_x} is 10:
+    log "equality works"
+
+if {_x} is not 5:
+    log "not equality works"
+
+if {_x} > 5:
+    log "greater than works"
+
+if {_x} >= 10:
+    log "greater or equal works"
+
+set {_text} to "hello world"
+if {_text} contains "world":
+    log "contains works"
+
+if {_text} starts with "hello":
+    log "starts with works"

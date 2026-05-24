@@ -1,0 +1,14 @@
+# Test: Error conditions (parse-only tests)
+
+on script load:
+    # Division by zero would be a runtime error
+    set {_x} to 10 / 2
+
+    # Null access would be a runtime error
+    set {_y} to null
+
+    # Type mismatch would be a runtime error
+    set {_z} to 5
+
+    # Missing arguments
+    log "Testing error handling"

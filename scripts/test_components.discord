@@ -1,0 +1,15 @@
+# Test: Components
+
+options:
+    prefix: "!"
+
+discord command show_buttons:
+    prefixes: !
+    trigger:
+        make row:
+            add new primary button with id "btn_test" named "Test Button" to components of row builder
+        reply with "Check the button!"
+
+on button click:
+    if event-string is "btn_test":
+        log "Button clicked!"

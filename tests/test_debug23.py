@@ -1,0 +1,13 @@
+from language.lexer import Lexer, TokenType
+
+source = """options:
+    prefix: "!"
+
+on script load:
+    send "hello" to console
+"""
+
+lexer = Lexer(source)
+tokens = lexer.tokenize()
+for i, t in enumerate(tokens):
+    print(f"[{i:3d}] {t.type.name:20s} {str(t.value)[:60]:60s} L{t.line}:{t.column}")

@@ -1,0 +1,21 @@
+options:
+    prefix: "!"
+
+on button click:
+    if id of event-interaction is "help":
+        reply with "Help is on the way!"
+        stop
+    if id of event-interaction is "greet":
+        reply with "Hello there!" hidden true
+
+discord command menu:
+    prefixes: !
+    trigger:
+        make embed:
+            set title of embed to "Interactive Menu"
+            set description of embed to "Click a button below!"
+            set color of embed to #E91E63
+        make row:
+            add new button primary with id "help" named "Help" to components of row builder
+            add new button success with id "greet" named "Greet" to components of row builder
+        post last embed to event-channel

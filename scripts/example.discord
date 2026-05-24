@@ -1,0 +1,32 @@
+options:
+    prefix: "!"
+
+on script load:
+    send "&aExample script loaded!" to console
+
+command /ping:
+    trigger:
+        reply with "Pong!"
+
+on message:
+    if content of event-message contains "hello":
+        reply with "Hello there, %mention tag of event-author%!"
+
+on guild member join:
+    set {_channel} to text channel named "welcome" in event-guild
+    if {_channel} is set:
+        make embed:
+            set title of embed to "Welcome!"
+            set description of embed to "Welcome %mention tag of event-member%!"
+            set embed color of embed to green
+            set thumbnail of embed to avatar of event-user
+        post last embed to {_channel}
+
+on reaction add:
+    set {_role} to {reactionrole::%id of event-message%::%event-emote%}
+    if {_role} is set:
+        add {_role} to roles of event-member
+
+on button click:
+    if event-string starts with "poll_":
+        reply with hidden "Thanks for voting!"

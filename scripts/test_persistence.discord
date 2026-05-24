@@ -1,0 +1,12 @@
+# Test: Persistence (global variables)
+
+on script load:
+    log "Loaded with counter = %{counter}%"
+
+    set {counter} to {counter} + 1
+    log "Counter incremented to %{counter}%"
+
+    if {counter} is 1:
+        log "First run detected"
+    else:
+        log "Subsequent run detected"

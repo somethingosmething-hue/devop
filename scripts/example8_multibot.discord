@@ -1,0 +1,17 @@
+define new bot named "ModBot":
+    token: "TOKEN_A"
+    intents: messages, guilds, members
+    on ready:
+        set presence of event-bot to watching "for rule breakers"
+
+define new bot named "MusicBot":
+    token: "TOKEN_B"
+    intents: guilds, voice_states
+    on ready:
+        set presence of event-bot to listening "music commands"
+
+on message:
+    if event-bot is bot named "ModBot":
+        if content of event-message contains "badword":
+            delete event-message
+            send "Watch your language!" to event-channel

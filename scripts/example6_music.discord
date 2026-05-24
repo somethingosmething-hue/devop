@@ -1,0 +1,37 @@
+options:
+    prefix: "!"
+
+on script load:
+    send "Music bot loaded!" to console
+
+discord command play:
+    prefixes: !
+    trigger:
+        set {_channel} to voice channel of event-member
+        if {_channel} is not set:
+            reply with "You must be in a voice channel!"
+            stop
+        connect event-bot to {_channel}
+        load audio from arg-1:
+            on track load:
+                play loaded track in event-guild
+                reply with "Now playing a track!"
+            on load error:
+                reply with "Error loading track!"
+            on no matches:
+                reply with "No tracks found!"
+
+discord command stop:
+    prefixes: !
+    trigger:
+        stop the track of event-guild
+        reply with "Stopped!"
+
+discord command queue:
+    prefixes: !
+    trigger:
+        set {_queue} to queue of event-guild
+        if size of {_queue} is 0:
+            reply with "Queue is empty!"
+            stop
+        reply with "Queue has tracks!"

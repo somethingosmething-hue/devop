@@ -1,0 +1,15 @@
+on ready from bot:
+    set {_cmd} to new slash command named "userinfo" with description "Get user info"
+    update {_cmd} globally in event-bot
+
+on slash command:
+    if event-string is "userinfo":
+        set {_member} to member of event-user in event-guild
+        make embed:
+            set title of embed to "User Info"
+            set description of embed to "Info about the user"
+            set color of embed to blue
+            add field named "User ID" with value id of event-user to fields of embed
+            add inline field named "Joined" with value id of {_member} to fields of embed
+            add inline field named "Roles" with value id of event-guild to fields of embed
+        reply with last embed
