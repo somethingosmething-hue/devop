@@ -407,7 +407,7 @@ class BotManager:
     def build_intents(self, intent_names: list[str]) -> discord.Intents:
         intents = discord.Intents.default()
         for name in intent_names:
-            name = name.lower().replace(" ", "_")
+            name = str(name).lower().replace(" ", "_")
             if name == "all":
                 intents = discord.Intents.all()
             elif name == "default":

@@ -63,7 +63,10 @@ def main(config_path: str = "config.toml"):
         pass
     finally:
         print("[MAIN] Shutting down...")
-        bot_manager.stop_all()
+        try:
+            loop.run_until_complete(bot_manager.stop_all())
+        except Exception:
+            pass
         store.save()
         print("[MAIN] Variables saved. Goodbye!")
 
