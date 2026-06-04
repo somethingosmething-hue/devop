@@ -44,8 +44,9 @@ class BotInstance:
                         self_bot.tree = discord.app_commands.CommandTree(self_bot)
                     except AttributeError:
                         pass
-                @self_bot.tree.command(name="reload", description="Reload scripts for this server")
-                async def reload_slash(interaction: discord.Interaction):
+                @self_bot.tree.command(name="reload", description="Reload .dc scripts for this server")
+                @discord.app_commands.describe(script="Script name to reload (omit or 'all' for all)")
+                async def reload_slash(interaction: discord.Interaction, script: str = None):
                     try:
                         guild = interaction.guild
                         user = interaction.user
@@ -53,33 +54,78 @@ class BotInstance:
                             await interaction.response.send_message("You need **Administrator** permission to reload scripts.", ephemeral=True)
                             return
                         await interaction.response.defer()
-                        script_mgr = getattr(self.runtime, 'script_manager', None)
-                        if not script_mgr:
+                        sm = getattr(self.runtime, 'script_manager', None)
+                        if not sm:
                             await interaction.edit_original_response(content="No script manager available.")
                             return
                         import time
                         guild_id = str(guild.id) if guild else ""
-                        guild_paths = script_mgr.scan(guild_id) if guild_id else []
-                        if not guild_paths:
+
+                        def fmt_line(msg: str) -> str:
+                            for s in ("Line ", "line "):
+                                idx = msg.find(s)
+                                if idx != -1:
+                                    rest = msg[idx + len(s):]
+                                    line_num = ""
+                                    for ch in rest:
+                                        if ch.isdigit() or ch == ":":
+                                            line_num += ch
+                                        else:
+                                            break
+                                    if line_num:
+                                        before = msg[:idx].rstrip()
+                                        return f"• `{before}` ({line_num})"
+                            return f"• {msg}"
+
+                        if script and script.lower() != "all":
+                            paths = [p for p in sm.scan(guild_id) if script in p or script == os.path.splitext(os.path.basename(p))[0]]
+                            if not paths:
+                                await interaction.edit_original_response(content=f"Script `{script}` not found in this server.")
+                                return
+                            t0 = time.time()
+                            sf = sm.reload_script(paths[0])
+                            elapsed_ms = (time.time() - t0) * 1000
+                            parts = []
+                            if sf.error:
+                                msg = str(sf.error)
+                                parts.append("**__Errors:__**\n")
+                                parts.append(f"⇄ *{sf.name}*\n{fmt_line(msg)}\n")
+                                parts.append(f"\n⏲ Reloaded **{sf.name}** with errors. ({elapsed_ms:.0f}ms)")
+                                parts.append(f"\n​     → 1 error")
+                            else:
+                                parts.append(f"⏲ Reloaded **{sf.name}** successfully. ({elapsed_ms:.0f}ms)")
+                            await interaction.edit_original_response(content="\n".join(parts))
+                            return
+
+                        paths = sm.scan(guild_id) if guild_id else []
+                        if not paths:
                             msg = "No scripts found for this server." if guild_id else "No guild context."
                             await interaction.edit_original_response(content=msg)
                             return
                         t0 = time.time()
-                        good = bad = 0
-                        errors = []
-                        for path in guild_paths:
-                            sf = script_mgr.reload_script(path)
+                        per_file = {}
+                        for path in paths:
+                            sf = sm.reload_script(path)
                             if sf.error:
-                                bad += 1
-                                errors.append(f"**{sf.name}** — error (`{sf.error}`)")
-                            else:
-                                good += 1
+                                if sf.name not in per_file:
+                                    per_file[sf.name] = []
+                                per_file[sf.name].append(str(sf.error))
                         elapsed_ms = (time.time() - t0) * 1000
-                        if errors:
-                            text = f"Reloaded {good + bad} scripts ({good} OK, {bad} errors):\n" + "\n".join(errors)
+                        parts = []
+                        if per_file:
+                            parts.append("**__Errors:__**\n")
+                            for fname in sorted(per_file):
+                                parts.append(f"⇄ *{fname}*")
+                                for err in per_file[fname]:
+                                    parts.append(fmt_line(str(err)))
+                                parts.append("")
+                            total_err = sum(len(v) for v in per_file.values())
+                            good = len(paths) - total_err
+                            parts.append(f"⏲ Reloaded **{len(paths)}** scripts. ({elapsed_ms:.0f}ms)")
+                            parts.append(f"​     → {total_err} error{'s' if total_err != 1 else ''}")
                         else:
-                            text = f"Successfully reloaded all {good} scripts"
-                        await interaction.edit_original_response(content=f"{text} ({elapsed_ms:.0f}ms)")
+                            parts.append(f"⏲ Reloaded **{len(paths)}** scripts successfully. ({elapsed_ms:.0f}ms)")
+                        await interaction.edit_original_response(content="\n".join(parts))
                     except Exception as e:
                         import traceback
                         tb = traceback.format_exc()

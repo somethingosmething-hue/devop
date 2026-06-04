@@ -53,9 +53,9 @@ class ScriptManager:
 
     def scan(self, guild_id: str = "") -> list[str]:
         if guild_id:
-            pattern = os.path.join(self.script_dir, guild_id, "*.discord")
+            pattern = os.path.join(self.script_dir, guild_id, "*.dc")
         else:
-            pattern = os.path.join(self.script_dir, "**", "*.discord")
+            pattern = os.path.join(self.script_dir, "**", "*.dc")
         files = glob_module.glob(pattern, recursive=True)
         return [f for f in sorted(files) if os.path.isfile(f)]
 
@@ -87,7 +87,7 @@ class ScriptManager:
             for path in self.scan(guild_id):
                 sf = self.load_script(path, guild_id)
                 loaded.append(sf)
-        root_pattern = os.path.join(self.script_dir, "*.discord")
+        root_pattern = os.path.join(self.script_dir, "*.dc")
         for path in sorted(glob_module.glob(root_pattern)):
             if os.path.isfile(path):
                 sf = self.load_script(path, "__global__")
@@ -120,7 +120,7 @@ class ScriptManager:
 
     def get_script(self, name: str) -> ScriptFile | None:
         for path, sf in self.scripts.items():
-            if sf.name == name or sf.name == f"{name}.discord" or path == name:
+            if sf.name == name or sf.name == f"{name}.dc" or path == name:
                 return sf
         for path, sf in self.scripts.items():
             if name in path:

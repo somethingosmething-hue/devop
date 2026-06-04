@@ -92,9 +92,9 @@ async def _cmd_reload(runtime: Runtime, ctx: EventContext, args: list[str]) -> s
     t0 = time.time()
 
     if args:
-        name = args[0].removesuffix(".discord")
+        name = args[0].removesuffix(".dc")
         found = [sf for sf in script_mgr.scripts.values()
-                 if sf.guild_id == guild_id and sf.name.removesuffix(".discord") == name]
+                 if sf.guild_id == guild_id and sf.name.removesuffix(".dc") == name]
         if not found:
             result = f"Script `{name}` not found in this server."
         else:
@@ -341,9 +341,9 @@ async def _cmd_lint(runtime: Runtime, ctx: EventContext, args: list[str]) -> str
 
     scripts_dir = getattr(script_mgr, 'script_dir', 'scripts')
     import os, glob as glob_module
-    script_files = glob_module.glob(os.path.join(scripts_dir, "**", "*.discord"), recursive=True)
+    script_files = glob_module.glob(os.path.join(scripts_dir, "**", "*.dc"), recursive=True)
     if not script_files:
-        return f"No `.discord` scripts found in `{scripts_dir}/`."
+        return f"No `.dc` scripts found in `{scripts_dir}/`."
 
     lines = [f"**Linting {len(script_files)} scripts in `{scripts_dir}/`:**"]
     total_errors = 0

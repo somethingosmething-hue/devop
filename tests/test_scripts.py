@@ -6,7 +6,7 @@ passed = 0
 failed = 0
 
 script_dir = "tests"
-for fp in sorted(glob.glob(os.path.join(script_dir, "*.discord"))):
+for fp in sorted(glob.glob(os.path.join(script_dir, "*.dc"))):
     name = os.path.basename(fp)
     try:
         with open(fp, "r", encoding="utf-8") as f:
