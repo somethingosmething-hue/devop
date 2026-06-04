@@ -77,19 +77,37 @@ async def _cmd_reload(runtime: Runtime, ctx: EventContext, args: list[str]) -> s
     if not script_mgr:
         return "No script manager available."
 
+    message = ctx.get("message")
+    guild = ctx.get("guild")
+    guild_id = str(guild.id) if guild else ""
+
+    if guild:
+        member = guild.get_member(message.author.id) if message else None
+        if member and not member.guild_permissions.administrator:
+            return "You need **Administrator** permission to reload scripts."
+
     if args:
-        name = args[0]
-        sf = script_mgr.get_script(name)
-        if not sf:
-            return f"Script `{name}` not found."
-        sf = script_mgr.reload_script(sf.path)
+        name = args[0].removesuffix(".discord")
+        found = [sf for sf in script_mgr.scripts.values()
+                 if sf.guild_id == guild_id and sf.name.removesuffix(".discord") == name]
+        if not found:
+            return f"Script `{name}` not found in this server."
+        sf = script_mgr.reload_script(found[0].path)
         status = "OK" if not sf.error else f"ERROR: {sf.error}"
         return f"Reloaded `{sf.name}`: {status}"
-    else:
-        loaded = script_mgr.reload_all()
-        good = sum(1 for sf in loaded if not sf.error)
-        bad = len(loaded) - good
-        return f"Reloaded {len(loaded)} scripts ({good} OK, {bad} errors)."
+
+    guild_paths = script_mgr.scan(guild_id) if guild_id else []
+    if not guild_paths:
+        return "No scripts found for this server." if guild_id else "No guild context."
+
+    good = bad = 0
+    for path in guild_paths:
+        sf = script_mgr.reload_script(path)
+        if sf.error:
+            bad += 1
+        else:
+            good += 1
+    return f"Reloaded {good + bad} scripts ({good} OK, {bad} errors) for this server."
 
 
 async def _cmd_scripts(runtime: Runtime, ctx: EventContext, args: list[str]) -> str:
