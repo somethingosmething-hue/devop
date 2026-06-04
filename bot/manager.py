@@ -39,7 +39,6 @@ class BotInstance:
                 self_bot.tree = discord.appcommands.CommandTree(self_bot) if hasattr(discord, 'appcommands') else None
 
             async def setup_hook(self_bot):
-                await self.command_registry.register_slash_commands(self_bot, self.name, self.runtime, self.event_bus)
                 try:
                     @self_bot.tree.command(name="reload", description="Reload scripts for this server")
                     async def reload_slash(interaction: discord.Interaction):
@@ -78,6 +77,7 @@ class BotInstance:
                         await interaction.edit_original_response(content=f"{text} ({elapsed:.2f}s)")
                 except Exception as e:
                     print(f"[BOT] Error registering /reload: {e}")
+                await self.command_registry.register_slash_commands(self_bot, self.name, self.runtime, self.event_bus)
 
             async def on_ready(self_bot):
                 self.ready = True
