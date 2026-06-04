@@ -62,20 +62,13 @@ class BotInstance:
                         guild_id = str(guild.id) if guild else ""
 
                         def fmt_line(msg: str) -> str:
-                            for s in ("Line ", "line "):
-                                idx = msg.find(s)
-                                if idx != -1:
-                                    rest = msg[idx + len(s):]
-                                    line_num = ""
-                                    for ch in rest:
-                                        if ch.isdigit() or ch == ":":
-                                            line_num += ch
-                                        else:
-                                            break
-                                    if line_num:
-                                        before = msg[:idx].rstrip()
-                                        return f"• `{before}` ({line_num})"
-                            return f"• {msg}"
+                            import re
+                            m = re.match(r"^Line (\d+:\d+):\s*(.*)", msg)
+                            if m:
+                                line_part, rest = m.groups()
+                                first_line = rest.split("\n")[0].strip()
+                                return f"• `{first_line}` (Line {line_part})"
+                            return f"• {msg.split(chr(10))[0]}"
 
                         if script and script.lower() != "all":
                             paths = [p for p in sm.scan(guild_id) if script in p or script == os.path.splitext(os.path.basename(p))[0]]
