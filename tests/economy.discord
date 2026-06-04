@@ -1,0 +1,107 @@
+variables:
+    {ecurlist_users} = ""
+    {ecurlist::%id of event-user%::gold} = 0
+    {ecurlist::%id of event-user%::silver} = 0
+    {ecurlist::%id of event-user%::gems} = 0
+
+function is_allowed_user() :: boolean:
+    if id of event-user is "1411613435543945361":
+        return true
+    if id of event-user is "100000000000000000":
+        return true
+    if id of event-user is "200000000000000000":
+        return true
+    return false
+
+on ready from bot:
+    send "&aEconomy script loaded!" to console
+    set {_cmd} to new slash command named "etotalnumcurlist" with description "Show individual totals for all ecurlists"
+    update {_cmd} globally in event-bot
+
+function add_currency(user_id: text, type: text, amount: number):
+    set {_key} to "ecurlist::%{_user_id}%::%{_type}%"
+    set {_current} to {ecurlist::%{_user_id}%::%{_type}%}
+    if {_current} is not set:
+        set {ecurlist::%{_user_id}%::%{_type}%} to {_amount}
+    else:
+        add {_amount} to {ecurlist::%{_user_id}%::%{_type}%}
+
+discord command eshowcurlist [<user>]:
+    prefixes: !
+    trigger:
+        if is_allowed_user() is false:
+            reply with "You don't have permission to use this command!"
+            stop
+        if arg-1 is set:
+            set {_target} to arg-1
+        else:
+            set {_target} to id of event-user
+        set {_gold} to {ecurlist::%{_target}%::gold}
+        set {_silver} to {ecurlist::%{_target}%::silver}
+        set {_gems} to {ecurlist::%{_target}%::gems}
+        if {_gold} is not set: set {_gold} to 0
+        if {_silver} is not set: set {_silver} to 0
+        if {_gems} is not set: set {_gems} to 0
+        reply with "**Currency for <@%{_target}%>:** Gold: %{_gold}%, Silver: %{_silver}%, Gems: %{_gems}%"
+
+discord command enumcurlist:
+    prefixes: !
+    trigger:
+        if is_allowed_user() is false:
+            reply with "You don't have permission to use this command!"
+            stop
+        set {_list} to {ecurlist_users}
+        if {_list} is not set or {_list} is "":
+            reply with "No ecurlist entries found."
+            stop
+        set {_entries} to {_list} split by ","
+        reply with "**Users with currency entries:** %size of {_entries}% found.\n%{_list}%"
+
+on slash command:
+    if event-string is "etotalnumcurlist":
+        if is_allowed_user() is false:
+            reply with hidden "You don't have permission!"
+            stop
+        set {_list} to {ecurlist_users}
+        if {_list} is not set or {_list} is "":
+            reply with "No ecurlist entries found."
+            stop
+        set {_entries} to {_list} split by ","
+        set {_lines} to "**Ecurlist Individual Totals:**"
+        loop {_entries}::*:
+            set {_uid} to trim of {_loop-value}
+            if {_uid} is not set or {_uid} is "":
+                continue
+            set {_g} to {ecurlist::%{_uid}%::gold}
+            set {_s} to {ecurlist::%{_uid}%::silver}
+            set {_m} to {ecurlist::%{_uid}%::gems}
+            if {_g} is not set: set {_g} to 0
+            if {_s} is not set: set {_s} to 0
+            if {_m} is not set: set {_m} to 0
+            set {_total} to {_g} + {_s} + {_m}
+            set {_lines} to "%{_lines}%\n<@%{_uid}%> — Gold: %{_g}%, Silver: %{_s}%, Gems: %{_m}% (**Total: %{_total}%**)"
+        reply with hidden "%{_lines}%"
+
+discord command eaddcurrency [<user>] [<type>] [<amount>]:
+    prefixes: !
+    permissions: administrator
+    trigger:
+        if arg-1 is not set or arg-2 is not set or arg-3 is not set:
+            reply with "Usage: !eaddcurrency <user> <type> <amount>"
+            stop
+        set {_uid} to id of arg-1
+        set {_cur} to arg-2 lowercase
+        set {_amt} to arg-3 parsed as number
+        if {_amt} is not set:
+            reply with "Amount must be a number!"
+            stop
+        call add_currency({_uid}, {_cur}, {_amt})
+        set {_new} to {ecurlist::%{_uid}%::%{_cur}%}
+        if {_new} is not set: set {_new} to {_amt}
+        set {_ulist} to {ecurlist_users}
+        if {_ulist} is not set:
+            set {ecurlist_users} to {_uid}
+        else:
+            if {_ulist} does not contain {_uid}:
+                set {ecurlist_users} to "%{_ulist}%,%{_uid}%"
+        reply with "Added %{_amt}% %{_cur}% to <@%{_uid}%> (now: %{_new}%)"

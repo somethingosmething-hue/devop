@@ -139,79 +139,86 @@ class CommandRegistry:
         if await self.handle_diagnostic(message, bot_name, runtime, event_bus):
             return True
 
-        commands = runtime.registered_commands
+        guild_id = str(message.guild.id) if message.guild else ""
+        guild_commands = runtime.guild_registered_commands.get(guild_id, [])
+        global_commands = runtime.guild_registered_commands.get("__global__", [])
+        commands = guild_commands + global_commands
         content = message.content
-        for cmd in commands:
-            for prefix in cmd.prefixes:
-                if not content.startswith(prefix):
-                    continue
-                rest = content[len(prefix):]
-                args = rest.split()
-                if not args:
-                    continue
-                cmd_name = args[0].lower()
-                if cmd_name != cmd.name.lower() and cmd_name not in [a.lower() for a in cmd.aliases]:
-                    continue
+        runtime.current_guild_id = guild_id
+        try:
+            for cmd in commands:
+                for prefix in cmd.prefixes:
+                    if not content.startswith(prefix):
+                        continue
+                    rest = content[len(prefix):]
+                    args = rest.split()
+                    if not args:
+                        continue
+                    cmd_name = args[0].lower()
+                    if cmd_name != cmd.name.lower() and cmd_name not in [a.lower() for a in cmd.aliases]:
+                        continue
 
-                ctx = runtime.event_context
-                ctx.set("bot", runtime.bot_instances.get(bot_name))
-                ctx.set("message", message)
-                ctx.set("author", message.author)
-                ctx.set("channel", message.channel)
-                ctx.set("guild", message.guild)
-                ctx.set("command_name", cmd.name)
-                ctx.set("prefix", prefix)
-                ctx.set("prefix_command", cmd)
+                    ctx = runtime.event_context
+                    ctx.set("bot", runtime.bot_instances.get(bot_name))
+                    ctx.set("message", message)
+                    ctx.set("author", message.author)
+                    ctx.set("channel", message.channel)
+                    ctx.set("guild", message.guild)
+                    ctx.set("command_name", cmd.name)
+                    ctx.set("prefix", prefix)
+                    ctx.set("prefix_command", cmd)
 
-                if cmd.permissions:
-                    member = None
-                    if hasattr(message, 'guild') and message.guild:
-                        member = message.guild.get_member(message.author.id)
-                    if member:
-                        for perm_name in cmd.permissions:
-                            perm_name = perm_name.replace(" ", "_")
-                            if perm_name in ("administrator",) and hasattr(member, 'guild_permissions'):
-                                if getattr(member.guild_permissions, perm_name, False):
-                                    continue
-                            if hasattr(member, 'guild_permissions'):
-                                if not getattr(member.guild_permissions, perm_name, False) and perm_name != "administrator":
-                                    err_msg = cmd.permission_message or "You don't have permission to use this command!"
-                                    try:
-                                        await message.reply(err_msg)
-                                    except Exception:
-                                        pass
-                                    return True
+                    if cmd.permissions:
+                        member = None
+                        if hasattr(message, 'guild') and message.guild:
+                            member = message.guild.get_member(message.author.id)
+                        if member:
+                            for perm_name in cmd.permissions:
+                                perm_name = perm_name.replace(" ", "_")
+                                if perm_name in ("administrator",) and hasattr(member, 'guild_permissions'):
+                                    if getattr(member.guild_permissions, perm_name, False):
+                                        continue
+                                if hasattr(member, 'guild_permissions'):
+                                    if not getattr(member.guild_permissions, perm_name, False) and perm_name != "administrator":
+                                        err_msg = cmd.permission_message or "You don't have permission to use this command!"
+                                        try:
+                                            await message.reply(err_msg)
+                                        except Exception:
+                                            pass
+                                        return True
 
-                scope = Scope(runtime.global_scope)
-                raw_args = args[1:]
-                for i, (arg_name, arg_type, default_val) in enumerate(cmd.arguments):
-                    val = raw_args[i] if i < len(raw_args) else (default_val if default_val is not None else None)
-                    runtime.local_vars[f"arg-{i + 1}"] = val
-                    runtime.local_vars[f"arg{i + 1}"] = val
-                    runtime.local_vars[arg_name] = val
+                    scope = Scope(runtime.global_scope)
+                    raw_args = args[1:]
+                    for i, (arg_name, arg_type, default_val) in enumerate(cmd.arguments):
+                        val = raw_args[i] if i < len(raw_args) else (default_val if default_val is not None else None)
+                        runtime.local_vars[f"arg-{i + 1}"] = val
+                        runtime.local_vars[f"arg{i + 1}"] = val
+                        runtime.local_vars[arg_name] = val
 
-                if cmd.cooldown and message.author.id:
-                    cd_key = f"{bot_name}:{cmd.name}:{message.author.id}"
-                    now = time.time()
-                    if cd_key in self.cooldowns:
-                        remaining = self.cooldowns[cd_key] - now
-                        if remaining > 0:
-                            return True
-                    from language.types import parse_timespan
-                    cd_seconds = parse_timespan(str(cmd.cooldown))
-                    self.cooldowns[cd_key] = now + cd_seconds
+                    if cmd.cooldown and message.author.id:
+                        cd_key = f"{bot_name}:{cmd.name}:{message.author.id}"
+                        now = time.time()
+                        if cd_key in self.cooldowns:
+                            remaining = self.cooldowns[cd_key] - now
+                            if remaining > 0:
+                                return True
+                        from language.types import parse_timespan
+                        cd_seconds = parse_timespan(str(cmd.cooldown))
+                        self.cooldowns[cd_key] = now + cd_seconds
 
-                try:
-                    for stmt in cmd.trigger:
-                        runtime.execute_effect_list([stmt], scope)
-                except Exception as e:
-                    print(f"[CMD] Error executing '{cmd.name}': {e}")
                     try:
-                        await message.reply(f"Error: {e}")
-                    except Exception:
-                        pass
-                return True
-        return False
+                        for stmt in cmd.trigger:
+                            runtime.execute_effect_list([stmt], scope)
+                    except Exception as e:
+                        print(f"[CMD] Error executing '{cmd.name}': {e}")
+                        try:
+                            await message.reply(f"Error: {e}")
+                        except Exception:
+                            pass
+                    return True
+            return False
+        finally:
+            runtime.current_guild_id = None
 
     def has_cooldown(self, key: str) -> bool:
         if key in self.cooldowns:

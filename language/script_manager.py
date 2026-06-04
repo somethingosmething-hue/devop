@@ -6,14 +6,14 @@ from .variable_store import VariableStore
 from typing import Any, Optional, Callable
 import os
 import time
-import threading
 import glob as glob_module
 
 
 class ScriptFile:
-    def __init__(self, path: str):
+    def __init__(self, path: str, guild_id: str = ""):
         self.path = path
         self.name = os.path.basename(path)
+        self.guild_id = guild_id
         self.source = ""
         self.ast: Script | None = None
         self.error: str | None = None
@@ -22,7 +22,7 @@ class ScriptFile:
         self.enabled = not self.name.startswith("-")
 
     def __repr__(self) -> str:
-        return f"ScriptFile({self.name}, enabled={self.enabled})"
+        return f"ScriptFile({self.name}, guild={self.guild_id}, enabled={self.enabled})"
 
 
 class ScriptManager:
@@ -33,18 +33,29 @@ class ScriptManager:
         self.scripts: dict[str, ScriptFile] = {}
         self.on_load_callbacks: list[Callable] = []
         self.on_error_callbacks: list[Callable] = []
-        self._watching = False
-        self._watch_thread: threading.Thread | None = None
-        self._running = True
         os.makedirs(script_dir, exist_ok=True)
 
-    def scan(self) -> list[str]:
-        pattern = os.path.join(self.script_dir, "**", "*.discord")
+    def _get_guild_dirs(self) -> list[str]:
+        """Return list of guild ID subdirectories under script_dir."""
+        dirs = []
+        try:
+            for entry in os.scandir(self.script_dir):
+                if entry.is_dir() and not entry.name.startswith("."):
+                    dirs.append(entry.name)
+        except FileNotFoundError:
+            pass
+        return dirs
+
+    def scan(self, guild_id: str = "") -> list[str]:
+        if guild_id:
+            pattern = os.path.join(self.script_dir, guild_id, "*.discord")
+        else:
+            pattern = os.path.join(self.script_dir, "**", "*.discord")
         files = glob_module.glob(pattern, recursive=True)
         return [f for f in sorted(files) if os.path.isfile(f)]
 
-    def load_script(self, path: str) -> ScriptFile:
-        sf = ScriptFile(path)
+    def load_script(self, path: str, guild_id: str = "") -> ScriptFile:
+        sf = ScriptFile(path, guild_id)
         try:
             with open(path, "r", encoding="utf-8") as f:
                 sf.source = f.read()
@@ -53,7 +64,7 @@ class ScriptManager:
             sf.loaded_at = time.time()
             sf.last_modified = os.path.getmtime(path)
             sf.error = None
-            self._register_from_ast(sf)
+            self._register_from_ast(sf, guild_id)
         except ParseError as e:
             sf.error = str(e)
             sf.ast = None
@@ -67,26 +78,39 @@ class ScriptManager:
 
     def load_all(self) -> list[ScriptFile]:
         loaded = []
-        for path in self.scan():
-            sf = self.load_script(path)
-            loaded.append(sf)
+        for guild_id in self._get_guild_dirs():
+            for path in self.scan(guild_id):
+                sf = self.load_script(path, guild_id)
+                loaded.append(sf)
+        root_pattern = os.path.join(self.script_dir, "*.discord")
+        for path in sorted(glob_module.glob(root_pattern)):
+            if os.path.isfile(path):
+                sf = self.load_script(path, "__global__")
+                loaded.append(sf)
         return loaded
 
     def reload_script(self, path: str) -> ScriptFile:
         old = self.scripts.get(path)
         if old and old.ast:
             self._unregister_from_ast(old)
-        sf = self.load_script(path)
+        sf = self.load_script(path, old.guild_id if old else "")
         self._fire_on_load(sf)
         return sf
 
     def reload_all(self) -> list[ScriptFile]:
-        self.runtime.functions.clear()
-        self.runtime.event_handlers.clear()
-        self.runtime.registered_commands.clear()
-        self.runtime.slash_commands.clear()
-        self.runtime.embed_templates.clear()
-        self.runtime.custom_event_handlers.clear()
+        for guild_id in list(self.runtime.guild_functions.keys()):
+            self.runtime.guild_functions[guild_id].clear()
+            self.runtime.guild_event_handlers[guild_id].clear()
+            self.runtime.guild_registered_commands[guild_id].clear()
+            self.runtime.guild_slash_commands[guild_id].clear()
+            self.runtime.guild_custom_event_handlers[guild_id].clear()
+            self.runtime.guild_embed_templates[guild_id].clear()
+        self.runtime.guild_functions.clear()
+        self.runtime.guild_event_handlers.clear()
+        self.runtime.guild_registered_commands.clear()
+        self.runtime.guild_slash_commands.clear()
+        self.runtime.guild_custom_event_handlers.clear()
+        self.runtime.guild_embed_templates.clear()
         return self.load_all()
 
     def get_script(self, name: str) -> ScriptFile | None:
@@ -98,43 +122,58 @@ class ScriptManager:
                 return sf
         return None
 
-    def _register_from_ast(self, sf: ScriptFile) -> None:
+    def _register_from_ast(self, sf: ScriptFile, guild_id: str = "") -> None:
         if not sf.ast:
             return
-        if sf.enabled:
-            for key, val in sf.ast.options.items():
-                self.runtime.option_vars[key] = val
-            for name, fn in sf.ast.functions.items():
-                self.runtime.functions[name] = fn
-            for cmd in sf.ast.commands:
-                self.runtime.registered_commands.append(cmd)
-            for sc in sf.ast.slash_commands:
-                self.runtime.slash_commands.append(sc)
-            for ev in sf.ast.events:
-                self.runtime.event_handlers.append(ev)
-                if ev.event_type == "custom event":
-                    filter_text = ev.filters.get("type", "")
-                    if filter_text not in self.runtime.custom_event_handlers:
-                        self.runtime.custom_event_handlers[filter_text] = []
-                    self.runtime.custom_event_handlers[filter_text].append(ev)
-            for bd in sf.ast.bot_definitions:
-                if self.runtime.bot_manager:
-                    self.runtime.bot_manager.register_definition(bd)
+        if not sf.enabled:
+            return
+        gid = guild_id or "__global__"
+
+        if gid not in self.runtime.guild_functions:
+            self.runtime.guild_functions[gid] = {}
+            self.runtime.guild_event_handlers[gid] = []
+            self.runtime.guild_registered_commands[gid] = []
+            self.runtime.guild_slash_commands[gid] = []
+            self.runtime.guild_custom_event_handlers[gid] = {}
+            self.runtime.guild_embed_templates[gid] = {}
+
+        for key, val in sf.ast.options.items():
+            self.runtime.option_vars[key] = val
+        for name, fn in sf.ast.functions.items():
+            self.runtime.guild_functions[gid][name] = fn
+        for cmd in sf.ast.commands:
+            self.runtime.guild_registered_commands[gid].append(cmd)
+        for sc in sf.ast.slash_commands:
+            self.runtime.guild_slash_commands[gid].append(sc)
+        for ev in sf.ast.events:
+            self.runtime.guild_event_handlers[gid].append(ev)
+            if ev.event_type == "custom event":
+                filter_text = ev.filters.get("type", "")
+                if filter_text not in self.runtime.guild_custom_event_handlers[gid]:
+                    self.runtime.guild_custom_event_handlers[gid][filter_text] = []
+                self.runtime.guild_custom_event_handlers[gid][filter_text].append(ev)
+        for bd in sf.ast.bot_definitions:
+            if self.runtime.bot_manager:
+                self.runtime.bot_manager.register_definition(bd)
 
     def _unregister_from_ast(self, sf: ScriptFile) -> None:
         if not sf.ast:
             return
+        gid = sf.guild_id or "__global__"
         for name in sf.ast.functions:
-            self.runtime.functions.pop(name, None)
+            self.runtime.guild_functions.get(gid, {}).pop(name, None)
         for cmd in sf.ast.commands:
-            if cmd in self.runtime.registered_commands:
-                self.runtime.registered_commands.remove(cmd)
+            cmds = self.runtime.guild_registered_commands.get(gid, [])
+            if cmd in cmds:
+                cmds.remove(cmd)
         for sc in sf.ast.slash_commands:
-            if sc in self.runtime.slash_commands:
-                self.runtime.slash_commands.remove(sc)
+            scmds = self.runtime.guild_slash_commands.get(gid, [])
+            if sc in scmds:
+                scmds.remove(sc)
         for ev in sf.ast.events:
-            if ev in self.runtime.event_handlers:
-                self.runtime.event_handlers.remove(ev)
+            handlers = self.runtime.guild_event_handlers.get(gid, [])
+            if ev in handlers:
+                handlers.remove(ev)
         for bd in sf.ast.bot_definitions:
             if self.runtime.bot_manager:
                 self.runtime.bot_manager.unregister_definition(bd)
@@ -170,47 +209,13 @@ class ScriptManager:
             except Exception:
                 pass
 
-    def start_watching(self, interval: float = 1.0) -> None:
-        if self._watching:
-            return
-        self._watching = True
-        self._running = True
-
-        def watch_loop():
-            last_states: dict[str, float] = {}
-            for path, sf in self.scripts.items():
-                try:
-                    last_states[path] = os.path.getmtime(path)
-                except OSError:
-                    pass
-            while self._running:
-                time.sleep(interval)
-                for path in self.scan():
-                    try:
-                        mtime = os.path.getmtime(path)
-                        if path not in last_states:
-                            last_states[path] = mtime
-                            self.reload_script(path)
-                        elif mtime > last_states[path]:
-                            last_states[path] = mtime
-                            print(f"[WATCH] Detected change in {path}, reloading...")
-                            self.reload_script(path)
-                    except OSError:
-                        pass
-
-        self._watch_thread = threading.Thread(target=watch_loop, daemon=True)
-        self._watch_thread.start()
-
-    def stop_watching(self) -> None:
-        self._running = False
-        self._watching = False
-
     def get_summary(self) -> list[dict[str, Any]]:
         summary = []
         for path, sf in self.scripts.items():
             info = {
                 "name": sf.name,
                 "path": path,
+                "guild_id": sf.guild_id,
                 "enabled": sf.enabled,
                 "loaded": sf.ast is not None,
                 "error": sf.error,

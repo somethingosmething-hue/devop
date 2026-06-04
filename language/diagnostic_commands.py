@@ -293,9 +293,9 @@ async def _cmd_lint(runtime: Runtime, ctx: EventContext, args: list[str]) -> str
     if not script_mgr:
         return "No script manager available."
 
-    scripts_dir = getattr(script_mgr, 'scripts_dir', 'scripts')
+    scripts_dir = getattr(script_mgr, 'script_dir', 'scripts')
     import os, glob as glob_module
-    script_files = glob_module.glob(os.path.join(scripts_dir, "*.discord"))
+    script_files = glob_module.glob(os.path.join(scripts_dir, "**", "*.discord"), recursive=True)
     if not script_files:
         return f"No `.discord` scripts found in `{scripts_dir}/`."
 

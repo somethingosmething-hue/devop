@@ -1421,7 +1421,10 @@ def _effect_send_typing(runtime: Runtime, args: list, kwargs: dict, body: list, 
 
 def _effect_register_embed_template(runtime: Runtime, args: list, kwargs: dict, body: list, scope: Scope) -> Any:
     name = str(_resolve_obj(runtime, args[0], scope) or "") if args else ""
-    runtime.embed_templates[name] = body
+    gid = runtime.current_guild_id or "__global__"
+    if gid not in runtime.guild_embed_templates:
+        runtime.guild_embed_templates[gid] = {}
+    runtime.guild_embed_templates[gid][name] = body
     print(f"[REGISTER EMBED TEMPLATE] {name}")
     return None
 

@@ -5,7 +5,7 @@ import os, glob
 passed = 0
 failed = 0
 
-script_dir = "scripts"
+script_dir = "tests"
 for fp in sorted(glob.glob(os.path.join(script_dir, "*.discord"))):
     name = os.path.basename(fp)
     try:

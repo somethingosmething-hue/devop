@@ -37,9 +37,7 @@ def main(config_path: str = "config.toml"):
     )
 
     loaded = script_manager.load_all()
-    print(f"[MAIN] Loaded {len(loaded)} scripts")
-
-    script_manager.start_watching(interval=1.0)
+    print(f"[MAIN] Loaded {len(loaded)} scripts for {len(set(sf.guild_id for sf in loaded))} guild(s)")
 
     shutdown_event = asyncio.Event()
 

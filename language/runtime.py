@@ -76,11 +76,15 @@ class Runtime:
     def __init__(self, type_registry: TypeRegistry | None = None):
         self.types = type_registry or TypeRegistry()
         self.global_scope = Scope()
-        self.functions: dict[str, FunctionDecl] = {}
-        self.event_handlers: list[EventHandler] = []
-        self.registered_commands: list[CommandDecl] = []
-        self.slash_commands: list[SlashCommandDecl] = []
-        self.embed_templates: dict[str, EmbedBuilder] = {}
+        # Per-guild registries — scripts are isolated by guild
+        self.guild_functions: dict[str, dict[str, FunctionDecl]] = {}
+        self.guild_event_handlers: dict[str, list[EventHandler]] = {}
+        self.guild_registered_commands: dict[str, list[CommandDecl]] = {}
+        self.guild_slash_commands: dict[str, list[SlashCommandDecl]] = {}
+        self.guild_custom_event_handlers: dict[str, dict[str, list[EventHandler]]] = {}
+        self.guild_embed_templates: dict[str, dict[str, list]] = {}
+        # Current guild context set before script execution
+        self.current_guild_id: str | None = None
         self.event_context: EventContext = EventContext()
         self.local_vars: dict[str, Any] = {}
         self.option_vars: dict[str, Any] = {}
@@ -91,8 +95,51 @@ class Runtime:
         self.effect_handlers: dict[str, Callable] = {}
         self.condition_handlers: dict[str, Callable] = {}
         self.expression_handlers: dict[str, Callable] = {}
-        self.custom_event_handlers: dict[str, list[EventHandler]] = {}
         self.bot_manager: Any = None
+
+    # --- Aggregated properties for diagnostic/reload use ---
+    @property
+    def functions(self) -> dict[str, FunctionDecl]:
+        result: dict[str, FunctionDecl] = {}
+        for g in self.guild_functions.values():
+            result.update(g)
+        return result
+
+    @property
+    def event_handlers(self) -> list[EventHandler]:
+        result: list[EventHandler] = []
+        for g in self.guild_event_handlers.values():
+            result.extend(g)
+        return result
+
+    @property
+    def registered_commands(self) -> list[CommandDecl]:
+        result: list[CommandDecl] = []
+        for g in self.guild_registered_commands.values():
+            result.extend(g)
+        return result
+
+    @property
+    def slash_commands(self) -> list[SlashCommandDecl]:
+        result: list[SlashCommandDecl] = []
+        for g in self.guild_slash_commands.values():
+            result.extend(g)
+        return result
+
+    @property
+    def embed_templates(self) -> dict[str, list]:
+        result: dict[str, list] = {}
+        for g in self.guild_embed_templates.values():
+            result.update(g)
+        return result
+
+    @property
+    def custom_event_handlers(self) -> dict[str, list[EventHandler]]:
+        result: dict[str, list[EventHandler]] = {}
+        for g in self.guild_custom_event_handlers.values():
+            for name, handlers in g.items():
+                result.setdefault(name, []).extend(handlers)
+        return result
 
     def set_bot_manager(self, mgr: Any) -> None:
         self.bot_manager = mgr
@@ -199,8 +246,12 @@ class Runtime:
 
     def _call_function(self, node: FunctionCall, scope: Scope) -> Any:
         name = node.name
-        if name in self.functions:
+        fn = None
+        if self.current_guild_id and self.current_guild_id in self.guild_functions:
+            fn = self.guild_functions[self.current_guild_id].get(name)
+        if fn is None and name in self.functions:
             fn = self.functions[name]
+        if fn is not None:
             fn_scope = Scope(self.global_scope)
             for i, (pname, ptype, default) in enumerate(fn.parameters):
                 if i < len(node.arguments):

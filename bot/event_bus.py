@@ -86,19 +86,34 @@ class EventBus:
         self.runtime = runtime
 
     async def fire(self, event_type: str, bot_name: str, values: dict[str, Any]) -> None:
-        handlers = self._find_handlers(event_type, bot_name)
+        guild_id = self._resolve_guild_id(values)
+        handlers = self._find_handlers(event_type, bot_name, guild_id)
         if not handlers:
             return
 
-        for handler in handlers:
-            try:
-                await self._execute_handler(handler, event_type, bot_name, values)
-            except Exception as e:
-                print(f"[EVENT] Error in handler for '{event_type}': {e}")
+        self.runtime.current_guild_id = guild_id
+        try:
+            for handler in handlers:
+                try:
+                    await self._execute_handler(handler, event_type, bot_name, values)
+                except Exception as e:
+                    print(f"[EVENT] Error in handler for '{event_type}': {e}")
+        finally:
+            self.runtime.current_guild_id = None
 
-    def _find_handlers(self, event_type: str, bot_name: str) -> list[EventHandler]:
+    def _resolve_guild_id(self, values: dict[str, Any]) -> str:
+        guild = values.get("guild")
+        if guild is not None:
+            gid = getattr(guild, 'id', None)
+            if gid is not None:
+                return str(gid)
+        return ""
+
+    def _find_handlers(self, event_type: str, bot_name: str, guild_id: str = "") -> list[EventHandler]:
         matching: list[EventHandler] = []
-        for handler in self.runtime.event_handlers:
+        handlers = self.runtime.guild_event_handlers.get(guild_id, [])
+        global_handlers = self.runtime.guild_event_handlers.get("__global__", [])
+        for handler in handlers + global_handlers:
             if self._event_matches(handler.event_type, event_type):
                 if handler.bot_filter and handler.bot_filter != bot_name:
                     continue
@@ -166,20 +181,30 @@ class EventBus:
         finally:
             ctx.values.update(old_values)
 
-    async def fire_custom(self, event_name: str, data: Optional[dict] = None, bot_name: str = "") -> None:
+    async def fire_custom(self, event_name: str, data: Optional[dict] = None, bot_name: str = "", guild_id: str = "") -> None:
         ctx = self.runtime.event_context
         ctx.set("custom_event_name", event_name)
         if data:
             for k, v in data.items():
                 ctx.set(k, v)
 
-        handlers = self.runtime.custom_event_handlers.get(event_name, [])
-        for handler in handlers:
-            if bot_name and handler.bot_filter and handler.bot_filter != bot_name:
-                continue
-            scope = Scope(self.runtime.global_scope)
-            try:
-                for stmt in handler.body:
-                    self.runtime.execute_effect_list([stmt], scope)
-            except Exception as e:
-                print(f"[CUSTOM EVENT] Error: {e}")
+        handlers = []
+        if guild_id:
+            guild_handlers = self.runtime.guild_custom_event_handlers.get(guild_id, {})
+            handlers.extend(guild_handlers.get(event_name, []))
+        global_handlers = self.runtime.guild_custom_event_handlers.get("__global__", {})
+        handlers.extend(global_handlers.get(event_name, []))
+
+        self.runtime.current_guild_id = guild_id
+        try:
+            for handler in handlers:
+                if bot_name and handler.bot_filter and handler.bot_filter != bot_name:
+                    continue
+                scope = Scope(self.runtime.global_scope)
+                try:
+                    for stmt in handler.body:
+                        self.runtime.execute_effect_list([stmt], scope)
+                except Exception as e:
+                    print(f"[CUSTOM EVENT] Error: {e}")
+        finally:
+            self.runtime.current_guild_id = None
