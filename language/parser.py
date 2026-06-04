@@ -387,7 +387,8 @@ class Parser:
         self.expect(TokenType.COLON)
         self.skip_newlines()
         if self.peek().type not in (TokenType.INDENT, TokenType.EOF):
-            raise ParseError("Expected indented block after event declaration", self.peek(), self.source_lines)
+            tok = self.peek()
+            raise ParseError(f"Unexpected '{tok.value}' after ':' — expected newline and indented block", tok, self.source_lines)
         ev.body = self.parse_block()
         return ev
 
