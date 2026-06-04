@@ -29,6 +29,7 @@ def main(config_path: str = "config.toml"):
         runtime.global_scope.set(key, val)
 
     script_manager = ScriptManager(runtime, "scripts", store)
+    runtime.script_manager = script_manager
     bot_manager = BotManager(runtime, script_manager)
     bot_manager.load_config(config_path)
 
