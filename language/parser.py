@@ -130,6 +130,14 @@ class Parser:
                 stmt = self.parse_statement()
                 if stmt:
                     script.global_statements.append(stmt)
+                elif self.peek().type != TokenType.EOF:
+                    tok = self.peek()
+                    val = tok.value or tok.type.name.lower()
+                    if tok.type == TokenType.INDENT:
+                        val = "indented block without matching keyword"
+                    elif tok.type == TokenType.DEDENT:
+                        val = "unexpected dedent"
+                    raise ParseError(f"Unexpected {val} — expected a statement or block definition", tok, self.source_lines)
             self.skip_newlines()
         return script
 
@@ -751,9 +759,12 @@ class Parser:
             elif kw == "reply" and self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "with":
                 _pv = self.parse_reply_effect()
 
-        # Try to parse as expression (could be function call or property access)
         if _pv is None and tok.type in (TokenType.IDENTIFIER, TokenType.KEYWORD, TokenType.STRING, TokenType.NUMBER, TokenType.HEX_COLOR, TokenType.GLOBAL_VAR, TokenType.LOCAL_VAR, TokenType.OPTION_VAR, TokenType.BOOLEAN):
             expr = self.parse_expression()
+            if self.peek().type == TokenType.COLON and not self.check_keyword("if"):
+                tok = self.peek()
+                tok = self.peek()
+                raise ParseError(f"Unexpected ':' after expression — this keyword is not recognized", tok, self.source_lines)
             if self.check_keyword("if") and self.peek(1).type != TokenType.KEYWORD:
                 pass
             if isinstance(expr, FunctionCall):
@@ -763,8 +774,6 @@ class Parser:
             _pv = stmt
         if _pv is not None and isinstance(_pv, EffectStatement):
             self.maybe_parse_bot_clause(_pv)
-        _pv = _pv
-        _pv = _pv
         return _pv
 
     def parse_set_statement(self) -> Statement:
