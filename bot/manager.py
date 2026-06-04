@@ -326,7 +326,7 @@ class BotInstance:
                                 "bot": self_bot,
                             })
                 elif interaction.type == discord.InteractionType.modal_submit:
-                    modal_values = self.component_handler.handle_modal_values(interaction, rt)
+                    modal_values = self.component_handler.handle_modal_values(interaction, self.runtime)
                     await self.event_bus.fire("modal receive", self.name, {
                         "interaction": interaction,
                         "string": interaction.data.get("custom_id", "") if interaction.data else "",

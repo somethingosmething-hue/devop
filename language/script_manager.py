@@ -102,6 +102,8 @@ class ScriptManager:
         if not sf.ast:
             return
         if sf.enabled:
+            for key, val in sf.ast.options.items():
+                self.runtime.option_vars[key] = val
             for name, fn in sf.ast.functions.items():
                 self.runtime.functions[name] = fn
             for cmd in sf.ast.commands:

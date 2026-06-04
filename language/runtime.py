@@ -338,8 +338,6 @@ class Runtime:
     def _resolve_identifier(self, name: str, scope: Scope) -> Any:
         if name.startswith("@"):
             return self.option_vars.get(name[1:])
-        if name.startswith("event-") or name.startswith("event_"):
-            return self.event_context.get(name)
         named_refs = {
             "now": datetime.datetime.now(),
             "true": True, "false": False, "null": None,
@@ -368,17 +366,19 @@ class Runtime:
         }
         if name in named_refs:
             return named_refs[name]
+        if name.startswith("event-") or name.startswith("event_"):
+            key = name[6:] if name.startswith("event-") else name[6:]
+            val = self.event_context.get(key)
+            if val is not None:
+                return val
+        if name in self.event_context.values:
+            return self.event_context.values[name]
         val = scope.get(name)
         if val is not None:
             return val
         val = self.global_scope.get(name)
         if val is not None:
             return val
-        return None
-
-        if name in self.event_context.values:
-            return self.event_context.values[name]
-
         return None
 
     def execute_effect(self, effect: EffectStatement, scope: Scope) -> Any:
