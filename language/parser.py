@@ -386,6 +386,8 @@ class Parser:
         ev.event_type = " ".join(parts)
         self.expect(TokenType.COLON)
         self.skip_newlines()
+        if self.peek().type not in (TokenType.INDENT, TokenType.EOF):
+            raise ParseError("Expected indented block after event declaration", self.peek(), self.source_lines)
         ev.body = self.parse_block()
         return ev
 
