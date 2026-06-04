@@ -37,4 +37,6 @@ for name, bak in backup.items():
 
 print("[START] Repository ready.")
 print("[START] Starting main.py...")
-os.execv(sys.executable, [sys.executable, "main.py"])
+sys.stdout.flush()
+from main import main
+main()
