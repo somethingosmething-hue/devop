@@ -30,11 +30,6 @@ class BotInstance:
         self.loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
 
-    async def setup_hook(self) -> None:
-        if isinstance(self.client, discord.AutoShardedBot) or isinstance(self.client, discord.Bot) if hasattr(discord, 'Bot') else False:
-            pass
-        await self.command_registry.register_slash_commands(self.client, self.name, self.runtime, self.event_bus)
-
     def _create_client(self) -> discord.Client:
         intents = self.intents
 
@@ -42,6 +37,47 @@ class BotInstance:
             def __init__(self_bot, *args, **kwargs):
                 super().__init__(*args, **kwargs)
                 self_bot.tree = discord.appcommands.CommandTree(self_bot) if hasattr(discord, 'appcommands') else None
+
+            async def setup_hook(self_bot):
+                await self.command_registry.register_slash_commands(self_bot, self.name, self.runtime, self.event_bus)
+                try:
+                    @self_bot.tree.command(name="reload", description="Reload scripts for this server")
+                    async def reload_slash(interaction: discord.Interaction):
+                        guild = interaction.guild
+                        user = interaction.user
+                        if guild and not guild.get_member(user.id).guild_permissions.administrator:
+                            await interaction.response.send_message("You need **Administrator** permission to reload scripts.", ephemeral=True)
+                            return
+                        await interaction.response.defer()
+                        script_mgr = getattr(self.runtime, 'script_manager', None)
+                        if not script_mgr:
+                            await interaction.edit_original_response(content="No script manager available.")
+                            return
+                        import time
+                        guild_id = str(guild.id) if guild else ""
+                        guild_paths = script_mgr.scan(guild_id) if guild_id else []
+                        if not guild_paths:
+                            msg = "No scripts found for this server." if guild_id else "No guild context."
+                            await interaction.edit_original_response(content=msg)
+                            return
+                        t0 = time.time()
+                        good = bad = 0
+                        errors = []
+                        for path in guild_paths:
+                            sf = script_mgr.reload_script(path)
+                            if sf.error:
+                                bad += 1
+                                errors.append(f"**{sf.name}** — error (`{sf.error}`)")
+                            else:
+                                good += 1
+                        elapsed = time.time() - t0
+                        if errors:
+                            text = f"Reloaded {good + bad} scripts ({good} OK, {bad} errors):\n" + "\n".join(errors)
+                        else:
+                            text = f"Successfully reloaded all {good} scripts"
+                        await interaction.edit_original_response(content=f"{text} ({elapsed:.2f}s)")
+                except Exception as e:
+                    print(f"[BOT] Error registering /reload: {e}")
 
             async def on_ready(self_bot):
                 self.ready = True
