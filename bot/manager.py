@@ -36,9 +36,14 @@ class BotInstance:
         class DiscordBotClient(discord.Client):
             def __init__(self_bot, *args, **kwargs):
                 super().__init__(*args, **kwargs)
-                self_bot.tree = discord.appcommands.CommandTree(self_bot) if hasattr(discord, 'appcommands') else None
+                self_bot.tree = discord.app_commands.CommandTree(self_bot) if hasattr(discord, 'app_commands') else None
 
             async def setup_hook(self_bot):
+                if not hasattr(self_bot, 'tree') or self_bot.tree is None:
+                    try:
+                        self_bot.tree = discord.app_commands.CommandTree(self_bot)
+                    except AttributeError:
+                        pass
                 try:
                     @self_bot.tree.command(name="reload", description="Reload scripts for this server")
                     async def reload_slash(interaction: discord.Interaction):
