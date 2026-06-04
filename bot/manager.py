@@ -82,9 +82,9 @@ class BotInstance:
                             if sf.error:
                                 msg = str(sf.error)
                                 parts.append("**__Errors:__**\n")
-                                parts.append(f"⇄ *{sf.name}*\n{fmt_line(msg)}\n")
+                                parts.append(f"⇄ *{sf.name}*\n{fmt_line(msg)}")
                                 parts.append(f"\n⏲ Reloaded **{sf.name}** with errors. ({elapsed_ms:.0f}ms)")
-                                parts.append(f"\n​     → 1 error")
+                                parts.append(f"​     → 1 error total")
                             else:
                                 parts.append(f"⏲ Reloaded **{sf.name}** successfully. ({elapsed_ms:.0f}ms)")
                             await interaction.edit_original_response(content="\n".join(parts))
@@ -115,7 +115,7 @@ class BotInstance:
                             total_err = sum(len(v) for v in per_file.values())
                             good = len(paths) - total_err
                             parts.append(f"⏲ Reloaded **{len(paths)}** scripts. ({elapsed_ms:.0f}ms)")
-                            parts.append(f"​     → {total_err} error{'s' if total_err != 1 else ''}")
+                            parts.append(f"​     → {total_err} error{'s' if total_err != 1 else ''} total")
                         else:
                             parts.append(f"⏲ Reloaded **{len(paths)}** scripts successfully. ({elapsed_ms:.0f}ms)")
                         await interaction.edit_original_response(content="\n".join(parts))
