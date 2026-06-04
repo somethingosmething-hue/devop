@@ -122,6 +122,9 @@ class BotInstance:
                 await self.event_bus.fire("guild member join", self.name, {
                     "guild": guild, "bot": self_bot,
                 })
+                script_mgr = getattr(self.runtime, 'script_manager', None)
+                if script_mgr:
+                    script_mgr.ensure_guild_dir(str(guild.id))
 
             async def on_member_join(self_bot, member):
                 await self.event_bus.fire("guild member join", self.name, {
@@ -485,16 +488,18 @@ class BotManager:
 
     async def start_all(self) -> None:
         self.load_config()
-        if not self.definitions:
-            token = self.get_token("default") or self.config.get("default", {}).get("token", "")
-            if token:
-                bd = BotDefinition()
-                bd.name = "default"
-                bd.token = token
-                bd.intents = ["default", "message_content", "members"]
-                self.definitions.append(bd)
+        token = self.get_token("default") or self.config.get("default", {}).get("token", "")
+        if token:
+            bd = BotDefinition()
+            bd.name = "default"
+            bd.token = token
+            bd.intents = ["default", "message_content", "members"]
+            instance = await self.build_instance(bd)
+            instance.start_threaded()
 
         for bd in self.definitions:
+            if bd.name == "default":
+                continue
             instance = await self.build_instance(bd)
             instance.start_threaded()
 

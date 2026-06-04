@@ -35,6 +35,11 @@ class ScriptManager:
         self.on_error_callbacks: list[Callable] = []
         os.makedirs(script_dir, exist_ok=True)
 
+    def ensure_guild_dir(self, guild_id: str) -> str:
+        path = os.path.join(self.script_dir, guild_id)
+        os.makedirs(path, exist_ok=True)
+        return path
+
     def _get_guild_dirs(self) -> list[str]:
         """Return list of guild ID subdirectories under script_dir."""
         dirs = []

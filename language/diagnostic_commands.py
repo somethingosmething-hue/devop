@@ -3,6 +3,7 @@ from language.runtime import Runtime, Scope, EventContext
 from language.parser import Parser
 from language.lexer import Lexer
 from typing import Any
+import time
 
 
 COMMANDS = {}
@@ -80,34 +81,61 @@ async def _cmd_reload(runtime: Runtime, ctx: EventContext, args: list[str]) -> s
     message = ctx.get("message")
     guild = ctx.get("guild")
     guild_id = str(guild.id) if guild else ""
+    channel = ctx.get("channel")
 
     if guild:
         member = guild.get_member(message.author.id) if message else None
         if member and not member.guild_permissions.administrator:
             return "You need **Administrator** permission to reload scripts."
 
+    reply = await channel.send("Reloading...") if channel else None
+    t0 = time.time()
+
     if args:
         name = args[0].removesuffix(".discord")
         found = [sf for sf in script_mgr.scripts.values()
                  if sf.guild_id == guild_id and sf.name.removesuffix(".discord") == name]
         if not found:
-            return f"Script `{name}` not found in this server."
-        sf = script_mgr.reload_script(found[0].path)
-        status = "OK" if not sf.error else f"ERROR: {sf.error}"
-        return f"Reloaded `{sf.name}`: {status}"
+            result = f"Script `{name}` not found in this server."
+        else:
+            sf = script_mgr.reload_script(found[0].path)
+            if sf.error:
+                result = f"**{sf.name}** — error (`{sf.error}`)"
+            else:
+                result = f"Successfully reloaded **{sf.name}**"
+        elapsed = time.time() - t0
+        text = f"{result} ({elapsed:.2f}s)"
+        if reply:
+            await reply.edit(content=text)
+        return ""
 
     guild_paths = script_mgr.scan(guild_id) if guild_id else []
     if not guild_paths:
-        return "No scripts found for this server." if guild_id else "No guild context."
+        result = "No scripts found for this server." if guild_id else "No guild context."
+        elapsed = time.time() - t0
+        text = f"{result} ({elapsed:.2f}s)"
+        if reply:
+            await reply.edit(content=text)
+        return ""
 
     good = bad = 0
+    errors = []
     for path in guild_paths:
         sf = script_mgr.reload_script(path)
         if sf.error:
             bad += 1
+            errors.append(f"**{sf.name}** — error (`{sf.error}`)")
         else:
             good += 1
-    return f"Reloaded {good + bad} scripts ({good} OK, {bad} errors) for this server."
+    elapsed = time.time() - t0
+    if errors:
+        result = f"Reloaded {good + bad} scripts ({good} OK, {bad} errors):\n" + "\n".join(errors)
+    else:
+        result = f"Successfully reloaded all {good} scripts"
+    text = f"{result} ({elapsed:.2f}s)"
+    if reply:
+        await reply.edit(content=text)
+    return ""
 
 
 async def _cmd_scripts(runtime: Runtime, ctx: EventContext, args: list[str]) -> str:
