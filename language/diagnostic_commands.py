@@ -103,8 +103,8 @@ async def _cmd_reload(runtime: Runtime, ctx: EventContext, args: list[str]) -> s
                 result = f"**{sf.name}** — error (`{sf.error}`)"
             else:
                 result = f"Successfully reloaded **{sf.name}**"
-        elapsed = time.time() - t0
-        text = f"{result} ({elapsed:.2f}s)"
+        elapsed = (time.time() - t0) * 1000
+        text = f"{result} ({elapsed:.0f}ms)"
         if reply:
             await reply.edit(content=text)
         return ""
@@ -112,8 +112,8 @@ async def _cmd_reload(runtime: Runtime, ctx: EventContext, args: list[str]) -> s
     guild_paths = script_mgr.scan(guild_id) if guild_id else []
     if not guild_paths:
         result = "No scripts found for this server." if guild_id else "No guild context."
-        elapsed = time.time() - t0
-        text = f"{result} ({elapsed:.2f}s)"
+        elapsed = (time.time() - t0) * 1000
+        text = f"{result} ({elapsed:.0f}ms)"
         if reply:
             await reply.edit(content=text)
         return ""
@@ -127,12 +127,12 @@ async def _cmd_reload(runtime: Runtime, ctx: EventContext, args: list[str]) -> s
             errors.append(f"**{sf.name}** — error (`{sf.error}`)")
         else:
             good += 1
-    elapsed = time.time() - t0
+    elapsed = (time.time() - t0) * 1000
     if errors:
         result = f"Reloaded {good + bad} scripts ({good} OK, {bad} errors):\n" + "\n".join(errors)
     else:
         result = f"Successfully reloaded all {good} scripts"
-    text = f"{result} ({elapsed:.2f}s)"
+    text = f"{result} ({elapsed:.0f}ms)"
     if reply:
         await reply.edit(content=text)
     return ""

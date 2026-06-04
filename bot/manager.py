@@ -44,9 +44,9 @@ class BotInstance:
                         self_bot.tree = discord.app_commands.CommandTree(self_bot)
                     except AttributeError:
                         pass
-                try:
-                    @self_bot.tree.command(name="reload", description="Reload scripts for this server")
-                    async def reload_slash(interaction: discord.Interaction):
+                @self_bot.tree.command(name="reload", description="Reload scripts for this server")
+                async def reload_slash(interaction: discord.Interaction):
+                    try:
                         guild = interaction.guild
                         user = interaction.user
                         if guild and not guild.get_member(user.id).guild_permissions.administrator:
@@ -74,14 +74,20 @@ class BotInstance:
                                 errors.append(f"**{sf.name}** — error (`{sf.error}`)")
                             else:
                                 good += 1
-                        elapsed = time.time() - t0
+                        elapsed_ms = (time.time() - t0) * 1000
                         if errors:
                             text = f"Reloaded {good + bad} scripts ({good} OK, {bad} errors):\n" + "\n".join(errors)
                         else:
                             text = f"Successfully reloaded all {good} scripts"
-                        await interaction.edit_original_response(content=f"{text} ({elapsed:.2f}s)")
-                except Exception as e:
-                    print(f"[BOT] Error registering /reload: {e}")
+                        await interaction.edit_original_response(content=f"{text} ({elapsed_ms:.0f}ms)")
+                    except Exception as e:
+                        import traceback
+                        tb = traceback.format_exc()
+                        print(f"[BOT] /reload error: {e}\n{tb}")
+                        try:
+                            await interaction.edit_original_response(content=f"**Error:** {e}")
+                        except Exception:
+                            pass
                 await self.command_registry.register_slash_commands(self_bot, self.name, self.runtime, self.event_bus)
 
             async def on_ready(self_bot):
