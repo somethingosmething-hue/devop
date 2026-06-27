@@ -271,6 +271,13 @@ class Runtime:
         if name in self.effect_handlers:
             args = [self.evaluate(a, scope) for a in node.arguments]
             return self.effect_handlers[name](self, args, {}, None, scope)
+
+        # Fallback: "X of Y" → _resolve_property(Y, "X")
+        if name.endswith(" of") and len(node.arguments) == 1:
+            obj = self.evaluate(node.arguments[0], scope)
+            if obj is not None:
+                return self._resolve_property(obj, name[:-3])
+
         return None
 
     def _resolve_property(self, obj: Any, prop: str) -> Any:

@@ -150,6 +150,8 @@ class Parser:
                 self.expect(TokenType.COLON)
                 self.skip_newlines()
                 val = self.parse_expression()
+                if isinstance(val, IdentifierRef):
+                    val = StringLiteral(value=val.name)
                 opts[key] = val
                 self.skip_newlines()
             self.expect(TokenType.DEDENT)
@@ -161,7 +163,7 @@ class Parser:
         while self.peek().type == TokenType.INDENT:
             self.expect(TokenType.INDENT)
             while self.peek().type != TokenType.DEDENT and self.peek().type != TokenType.EOF:
-                var_tok = self.expect(TokenType.GLOBAL_VAR)
+                var_tok = self.expect(TokenType.GLOBAL_VAR, TokenType.LOCAL_VAR)
                 self.expect(TokenType.EQUAL)
                 val = self.parse_expression()
                 vars_list.append((var_tok.value, val))
@@ -475,11 +477,40 @@ class Parser:
         if tok.type == TokenType.KEYWORD:
             kw = tok.value
             if kw == "set":
-                _pv = self.parse_set_statement()
+                if self.peek(1).type == TokenType.KEYWORD and self.peek(1).value in ("volume", "repeat", "auto", "audio"):
+                    self.advance()
+                    _pv = self.parse_audio_set(kw)
+                elif self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "presence":
+                    self.advance()
+                    self.advance()
+                    self.expect_keyword("of")
+                    bot = self.parse_expression()
+                    self.expect_keyword("to")
+                    activity_type = self.expect(TokenType.KEYWORD).value
+                    text = self.parse_expression()
+                    _pv = EffectStatement(effect_type="set_presence", arguments=[bot, activity_type, text])
+                elif self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "online":
+                    self.advance()
+                    self.advance()
+                    self.expect_keyword("status")
+                    self.expect_keyword("of")
+                    bot = self.parse_expression()
+                    self.expect_keyword("to")
+                    status = self.parse_expression()
+                    _pv = EffectStatement(effect_type="set_status", arguments=[bot, status])
+                else:
+                    _pv = self.parse_set_statement()
             elif kw == "add":
                 _pv = self.parse_add_statement()
             elif kw == "remove":
-                _pv = self.parse_remove_statement()
+                if self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "timeout":
+                    self.advance()
+                    self.advance()
+                    self.expect_keyword("from")
+                    member = self.parse_expression()
+                    _pv = EffectStatement(effect_type="remove_timeout", arguments=[member])
+                else:
+                    _pv = self.parse_remove_statement()
             elif kw == "delete":
                 self.advance()
                 _pv = DeleteVariable(variable=self.parse_expression())
@@ -535,7 +566,14 @@ class Parser:
                 val = self.parse_expression()
                 _pv = EffectStatement(effect_type="log", arguments=[val])
             elif kw == "send":
-                _pv = self.parse_send_effect()
+                if self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "typing":
+                    self.advance()
+                    self.advance()
+                    self.match_keyword("in")
+                    channel = self.parse_expression()
+                    _pv = EffectStatement(effect_type="send_typing", arguments=[channel])
+                else:
+                    _pv = self.parse_send_effect()
             elif kw == "reply":
                 _pv = self.parse_reply_effect()
             elif kw == "post":
@@ -612,13 +650,8 @@ class Parser:
                     if self.match_keyword("for"):
                         reason = self.parse_expression()
                     _pv = EffectStatement(effect_type="timeout_until", arguments=[member, until, reason])
-                _pv = EffectStatement(effect_type="timeout", arguments=[member, None, None])
-            elif kw == "remove" and self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "timeout":
-                self.advance()
-                self.advance()
-                self.expect_keyword("from")
-                member = self.parse_expression()
-                _pv = EffectStatement(effect_type="remove_timeout", arguments=[member])
+                else:
+                    _pv = EffectStatement(effect_type="timeout", arguments=[member, None, None])
             elif kw == "move":
                 self.advance()
                 member = self.parse_expression()
@@ -660,10 +693,17 @@ class Parser:
                 channel = self.parse_expression()
                 _pv = EffectStatement(effect_type="connect_voice", arguments=[bot, channel])
             elif kw == "load":
-                self.advance()
-                self.expect_keyword("audio")
-                self.expect_keyword("from")
-                _pv = self.parse_audio_load_section()
+                if self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "members":
+                    self.advance()
+                    self.advance()
+                    self.expect_keyword("of")
+                    guild = self.parse_expression()
+                    _pv = EffectStatement(effect_type="load_members", arguments=[guild])
+                else:
+                    self.advance()
+                    self.expect_keyword("audio")
+                    self.expect_keyword("from")
+                    _pv = self.parse_audio_load_section()
             elif kw == "play" or kw == "force":
                 is_force = kw == "force"
                 if is_force:
@@ -690,9 +730,6 @@ class Parser:
                 _pv = EffectStatement(effect_type="play_track", arguments=[track, guild, bot], keyword_args={"force": is_force})
             elif kw in ("pause", "resume", "skip", "stop"):
                 _pv = self.parse_audio_control(kw)
-            elif kw == "set" and self.peek(1).type == TokenType.KEYWORD and self.peek(1).value in ("volume", "repeat", "auto", "audio"):
-                self.advance()
-                _pv = self.parse_audio_set(kw)
             elif kw == "defer":
                 self.advance()
                 self.match_keyword("the", "interaction")
@@ -719,36 +756,6 @@ class Parser:
                 _pv = EffectStatement(effect_type="show_modal", arguments=[modal, user])
             elif kw == "execute":
                 _pv = self.parse_execute_effect()
-            elif kw == "set" and self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "presence":
-                self.advance()
-                self.advance()
-                self.expect_keyword("of")
-                bot = self.parse_expression()
-                self.expect_keyword("to")
-                activity_type = self.expect(TokenType.KEYWORD).value
-                text = self.parse_expression()
-                _pv = EffectStatement(effect_type="set_presence", arguments=[bot, activity_type, text])
-            elif kw == "set" and self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "online":
-                self.advance()
-                self.advance()
-                self.expect_keyword("status")
-                self.expect_keyword("of")
-                bot = self.parse_expression()
-                self.expect_keyword("to")
-                status = self.parse_expression()
-                _pv = EffectStatement(effect_type="set_status", arguments=[bot, status])
-            elif kw == "load" and self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "members":
-                self.advance()
-                self.advance()
-                self.expect_keyword("of")
-                guild = self.parse_expression()
-                _pv = EffectStatement(effect_type="load_members", arguments=[guild])
-            elif kw == "send" and self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "typing":
-                self.advance()
-                self.advance()
-                self.match_keyword("in")
-                channel = self.parse_expression()
-                _pv = EffectStatement(effect_type="send_typing", arguments=[channel])
             elif kw == "update":
                 self.advance()
                 cmd = self.parse_expression()
@@ -756,8 +763,6 @@ class Parser:
                 self.match_keyword("in")
                 bot = self.parse_expression() if self.peek().type != TokenType.NEWLINE else None
                 _pv = EffectStatement(effect_type="update_command", arguments=[cmd, bot])
-            elif kw == "reply" and self.peek(1).type == TokenType.KEYWORD and self.peek(1).value == "with":
-                _pv = self.parse_reply_effect()
 
         if _pv is None and tok.type in (TokenType.IDENTIFIER, TokenType.KEYWORD, TokenType.STRING, TokenType.NUMBER, TokenType.HEX_COLOR, TokenType.GLOBAL_VAR, TokenType.LOCAL_VAR, TokenType.OPTION_VAR, TokenType.BOOLEAN):
             expr = self.parse_expression()
@@ -1756,7 +1761,54 @@ class Parser:
             return Variable(name=f"event-{prop}", line=tok.line, column=tok.column)
 
         if tok.type == TokenType.IDENTIFIER or tok.type == TokenType.KEYWORD:
-            ident = self.advance().value
+            words = [self.advance().value]
+
+            # Greedily consume consecutive keywords/idents for multi-word expressions.
+            # Stop at keywords that are operators or argument introducers.
+            _BREAK = frozenset({"of", "named", "from", "with",
+                "is", "are", "has", "does", "have", "was",
+                "contains", "starts", "ends", "matches",
+                "and", "or", "nor", "xor",
+                "to", "in", "then", "if", "else"})
+            while self.peek().type in (TokenType.IDENTIFIER, TokenType.KEYWORD):
+                next_val = self.peek().value
+                if next_val in _BREAK:
+                    break
+                words.append(self.advance().value)
+
+            if len(words) > 1:
+                # Multi-word expression — always use FunctionCall for of/named/from/with id
+                compound = " ".join(words)
+                if self.peek().type == TokenType.LPAREN:
+                    self.advance()
+                    args: list[Any] = []
+                    while self.peek().type != TokenType.RPAREN and self.peek().type != TokenType.EOF:
+                        args.append(self.parse_expression())
+                        if self.peek().type == TokenType.COMMA:
+                            self.advance()
+                    self.expect(TokenType.RPAREN)
+                    return FunctionCall(name=compound, arguments=args, line=tok.line, column=tok.column)
+                if self.check_keyword("of"):
+                    self.advance()
+                    obj = self.parse_expression()
+                    return FunctionCall(name=f"{compound} of", arguments=[obj], line=tok.line, column=tok.column)
+                if self.check_keyword("named"):
+                    self.advance()
+                    name = self.parse_expression()
+                    return FunctionCall(name=compound, arguments=[name], line=tok.line, column=tok.column)
+                if self.check_keyword("with", "id"):
+                    self.advance()
+                    self.advance()
+                    id_val = self.parse_expression()
+                    return FunctionCall(name=compound, arguments=[id_val], line=tok.line, column=tok.column)
+                if self.check_keyword("from"):
+                    self.advance()
+                    source = self.parse_expression()
+                    return FunctionCall(name=f"{compound} from", arguments=[source], line=tok.line, column=tok.column)
+                return IdentifierRef(name=compound, line=tok.line, column=tok.column)
+
+            # Single-word expression — original behavior unchanged
+            ident = words[0]
             if self.peek().type == TokenType.LPAREN:
                 self.advance()
                 args: list[Any] = []
@@ -1987,14 +2039,23 @@ class Parser:
         items: list[Any] = []
         if self.match(TokenType.LBRACKET):
             while self.peek().type != TokenType.RBRACKET and self.peek().type != TokenType.EOF:
-                items.append(self.parse_expression())
+                item = self.parse_expression()
+                if isinstance(item, IdentifierRef):
+                    item = StringLiteral(value=item.name)
+                items.append(item)
                 if self.peek().type == TokenType.COMMA:
                     self.advance()
             self.expect(TokenType.RBRACKET)
         else:
-            items.append(self.parse_expression())
+            item = self.parse_expression()
+            if isinstance(item, IdentifierRef):
+                item = StringLiteral(value=item.name)
+            items.append(item)
             while self.match(TokenType.COMMA) or self.match_keyword("and"):
-                items.append(self.parse_expression())
+                item = self.parse_expression()
+                if isinstance(item, IdentifierRef):
+                    item = StringLiteral(value=item.name)
+                items.append(item)
                 if self.peek().type == TokenType.NEWLINE or self.peek().type == TokenType.DEDENT:
                     break
         return items

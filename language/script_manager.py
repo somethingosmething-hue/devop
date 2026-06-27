@@ -1,7 +1,7 @@
 from __future__ import annotations
 from .parser import Parser, ParseError
 from .ast import Script, EventHandler, CommandDecl, SlashCommandDecl, FunctionDecl, BotDefinition
-from .runtime import Runtime
+from .runtime import Runtime, Scope
 from .variable_store import VariableStore
 from typing import Any, Optional, Callable
 import os
@@ -141,6 +141,23 @@ class ScriptManager:
             self.runtime.guild_slash_commands[gid] = []
             self.runtime.guild_custom_event_handlers[gid] = {}
             self.runtime.guild_embed_templates[gid] = {}
+
+        for var_name, val_node in sf.ast.variables:
+            try:
+                val = self.runtime.evaluate(val_node, self.runtime.global_scope)
+            except Exception:
+                val = None
+            if var_name.startswith("_"):
+                self.runtime.local_vars[var_name] = val
+            else:
+                self.runtime.global_scope.set(var_name, val)
+
+        if sf.ast.global_statements:
+            try:
+                scope = Scope(self.runtime.global_scope)
+                self.runtime.execute_effect_list(sf.ast.global_statements, scope)
+            except Exception as e:
+                print(f"[WARN] Error executing global statements in {sf.name}: {e}")
 
         for key, val in sf.ast.options.items():
             self.runtime.option_vars[key] = val

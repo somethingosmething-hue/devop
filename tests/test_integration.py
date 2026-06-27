@@ -171,6 +171,209 @@ def test_parse_and_execute_condition():
     print("[OK] condition handler: object is set")
 
 
+def test_multi_word_expression_display_name():
+    """Bug 2: multi-word expression 'display name of X' parses as FunctionCall and evaluates."""
+    r = make_runtime()
+    scope = Scope(r.global_scope)
+    _, member, _, _ = make_mock_guild()
+    scope.set("event-player", member)
+
+    # 'display name of event-player' should be a FunctionCall
+    parser = Parser("display name of event-player")
+    expr = parser.parse_expression()
+    assert type(expr).__name__ == "FunctionCall", f"Expected FunctionCall, got {type(expr).__name__}"
+    assert expr.name == "display name of"
+    result = r.evaluate(expr, scope)
+    assert result == "TestUser", f"Expected 'TestUser', got {result}"
+    print("[OK] multi-word: display name of")
+
+
+def test_multi_word_expression_mention_tag():
+    """Bug 2: multi-word expression 'mention tag of X' parses and evaluates."""
+    r = make_runtime()
+    scope = Scope(r.global_scope)
+    _, member, _, _ = make_mock_guild()
+    scope.set("event-player", member)
+
+    parser = Parser("mention tag of event-player")
+    expr = parser.parse_expression()
+    assert type(expr).__name__ == "FunctionCall"
+    assert expr.name == "mention tag of"
+    result = r.evaluate(expr, scope)
+    assert result == "<@123>", f"Expected '<@123>', got {result}"
+    print("[OK] multi-word: mention tag of")
+
+
+def test_multi_word_expression_jump_url():
+    """Bug 2: multi-word expression 'jump url of X' parses and evaluates."""
+    r = make_runtime()
+    scope = Scope(r.global_scope)
+    guild, member, channel, _ = make_mock_guild()
+    msg = make_mock_message(guild, member, channel)
+    scope.set("event-message", msg)
+
+    parser = Parser("jump url of event-message")
+    expr = parser.parse_expression()
+    assert type(expr).__name__ == "FunctionCall"
+    assert expr.name == "jump url of"
+    result = r.evaluate(expr, scope)
+    assert result == "https://discord.com/msg/444", f"Expected jump URL, got {result}"
+    print("[OK] multi-word: jump url of")
+
+
+def test_multi_word_fallback_property():
+    """Fallback: 'X of' without registered handler uses _resolve_property."""
+    r = make_runtime()
+    scope = Scope(r.global_scope)
+    _, member, _, _ = make_mock_guild()
+    scope.set("event-member", member)
+
+    # 'id of' is a registered handler, but test the fallback path for something else
+    # 'banner of' is registered at line 41, test an unregistered property
+    # Use a fake multi-word expression that doesn't exist
+    scope.set("fake_obj", type("Obj", (), {"some_attr": 42})())
+    parser = Parser("some attr of fake_obj")
+    expr = parser.parse_expression()
+    assert type(expr).__name__ == "FunctionCall"
+    assert expr.name == "some attr of"
+    # No handler registered for "some attr of" — should use fallback
+    # Fallback tries _resolve_property(obj, "some attr") → hasattr fails (space) → None
+    result = r.evaluate(expr, scope)
+    assert result is None, f"Expected None from fallback, got {result}"
+    print("[OK] multi-word: fallback returns None for unregistered multi-word")
+
+
+def test_single_word_of_still_property_access():
+    """Single-word 'X of Y' still produces PropertyAccess."""
+    r = make_runtime()
+    scope = Scope(r.global_scope)
+    _, member, _, _ = make_mock_guild()
+    scope.set("event-player", member)
+
+    # 'id of' and 'name of' have handlers registered, but single-word goes through PropertyAccess
+    parser = Parser("id of event-player")
+    expr = parser.parse_expression()
+    assert type(expr).__name__ == "PropertyAccess", f"Expected PropertyAccess, got {type(expr).__name__}"
+    assert expr.property_name == "id"
+    result = r.evaluate(expr, scope)
+    assert result == 123, f"Expected 123, got {result}"
+    print("[OK] single-word: id of stays PropertyAccess")
+
+
+def test_list_literal_bare_keywords_as_strings():
+    """Bug 1: parse_list_literal converts IdentifierRef items to StringLiteral."""
+    # Test with prefixes: ! (bare '!' keyword)
+    parser = Parser("[!, kick_members, test]")
+    parser.advance()  # skip LBRACKET
+    items = parser.parse_list_literal()
+    assert len(items) == 3
+    for i, item in enumerate(items):
+        assert type(item).__name__ == "StringLiteral", f"Item {i} is {type(item).__name__}, expected StringLiteral"
+    assert items[0].value == "!"
+    assert items[1].value == "kick_members"
+    assert items[2].value == "test"
+
+    # Verify they work as strings at runtime
+    prefix_val = items[0].value
+    assert isinstance(prefix_val, str)
+    assert "!ping".startswith(prefix_val)
+    print("[OK] list literal: bare keywords become strings")
+
+
+def test_options_block_bare_keywords():
+    """Bug 1b: parse_options_block converts IdentifierRef values to StringLiteral."""
+    source = "options:\n    prefix: !\n    test: foo"
+    parser = Parser(source)
+    script = parser.parse()
+    options = script.options
+    assert "prefix" in options
+    val = options["prefix"]
+    assert type(val).__name__ == "StringLiteral", f"Expected StringLiteral, got {type(val).__name__}"
+    assert val.value == "!"
+    assert "test" in options
+    val2 = options["test"]
+    assert type(val2).__name__ == "StringLiteral", f"Expected StringLiteral, got {type(val2).__name__}"
+    assert val2.value == "foo"
+    print("[OK] options block: bare keyword value becomes StringLiteral")
+
+
+def test_variables_block_initialization():
+    """Bug 6: variables block values are parsed correctly."""
+    source = "variables:\n    {_x} = 10\n    {_y} = \"hello\"\n"
+    parser = Parser(source)
+    script = parser.parse()
+    assert len(script.variables) == 2
+    name0, val0 = script.variables[0]
+    assert name0 == "_x"
+    assert type(val0).__name__ == "NumberLiteral"
+    assert val0.value == 10
+    name1, val1 = script.variables[1]
+    assert name1 == "_y"
+    assert type(val1).__name__ == "StringLiteral"
+    assert val1.value == "hello"
+    print("[OK] variables block: correct parsing")
+
+
+def test_global_statements_parsing():
+    """Bug 5: global_statements are parsed and can be executed."""
+    source = 'set {_x} to 42\nsend "test" to console'
+    parser = Parser(source)
+    script = parser.parse()
+    assert len(script.global_statements) == 2
+    print("[OK] global statements: parsed correctly")
+
+
+def test_elif_ordering_set_volume():
+    """Bug 3: set volume goes to audio handler, not general set."""
+    parser = Parser("set volume of bot to 50")
+    stmt = parser.parse_statement()
+    assert stmt is not None
+    # Should be an audio effect, not SetVariable
+    assert type(stmt).__name__ == "EffectStatement", f"Expected EffectStatement, got {type(stmt).__name__}"
+    assert stmt.effect_type == "set_volume", f"Expected set_volume, got {stmt.effect_type}"
+    print(f"[OK] elif ordering: set volume")
+
+
+def test_elif_ordering_send_typing():
+    """Bug 3: send typing goes to typing handler, not general send."""
+    parser = Parser("send typing in event-channel")
+    stmt = parser.parse_statement()
+    assert stmt is not None
+    assert type(stmt).__name__ == "EffectStatement"
+    assert stmt.effect_type == "send_typing", f"Expected send_typing, got {stmt.effect_type}"
+    print("[OK] elif ordering: send typing")
+
+
+def test_elif_ordering_load_members():
+    """Bug 3: load members goes to load_members handler, not audio load."""
+    parser = Parser("load members of event-guild")
+    stmt = parser.parse_statement()
+    assert stmt is not None
+    assert type(stmt).__name__ == "EffectStatement"
+    assert stmt.effect_type == "load_members", f"Expected load_members, got {stmt.effect_type}"
+    print("[OK] elif ordering: load members")
+
+
+def test_timeout_fix():
+    """Bug 4: timeout with 'for' should not be overwritten by default."""
+    parser = Parser('timeout event-member for 1 day due to "test"')
+    stmt = parser.parse_statement()
+    assert stmt is not None
+    assert stmt.effect_type == "timeout", f"Expected timeout, got {stmt.effect_type}"
+    assert len(stmt.arguments) == 3
+    assert stmt.arguments[1] is not None, "Duration should not be None"
+    print(f"[OK] timeout fix: duration={stmt.arguments[1]}, reason={stmt.arguments[2]}")
+
+
+def test_timeout_until_fix():
+    """Bug 4: timeout until should not be overwritten."""
+    parser = Parser("timeout event-member until next week")
+    stmt = parser.parse_statement()
+    assert stmt is not None
+    assert stmt.effect_type == "timeout_until", f"Expected timeout_until, got {stmt.effect_type}"
+    print(f"[OK] timeout until fix: until={stmt.arguments[1]}")
+
+
 def test_parse_and_execute_with_events():
     r = make_runtime()
     scope = Scope(r.global_scope)
@@ -283,6 +486,21 @@ tests = [
     test_effect_signatures,
     test_expression_signatures,
     test_condition_signatures,
+    # Bug-specific regression tests
+    test_multi_word_expression_display_name,
+    test_multi_word_expression_mention_tag,
+    test_multi_word_expression_jump_url,
+    test_multi_word_fallback_property,
+    test_single_word_of_still_property_access,
+    test_list_literal_bare_keywords_as_strings,
+    test_options_block_bare_keywords,
+    test_variables_block_initialization,
+    test_global_statements_parsing,
+    test_elif_ordering_set_volume,
+    test_elif_ordering_send_typing,
+    test_elif_ordering_load_members,
+    test_timeout_fix,
+    test_timeout_until_fix,
 ]
 
 if __name__ == "__main__":
